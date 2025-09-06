@@ -1,7 +1,7 @@
 {
-  "name": "claude-tabbed-terminal",
-  "displayName": "Claude Tabbed Terminal",
-  "description": "A VS Code extension with tabbed terminals running Claude via node-pty and xterm.js",
+  "name": "claude-remote-control",
+  "displayName": "Claude Terminal With Remote Control",
+  "description": "A VS Code extension with tabbed terminals with remote control",
   "version": "0.0.1",
   "engines": {
     "vscode": "^1.74.0"
@@ -10,19 +10,19 @@
     "Other"
   ],
   "activationEvents": [
-    "onCommand:claude-tabbed-terminal.openTerminal"
+    "onCommand:claude-remote-control.openTerminal"
   ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
       {
-        "command": "claude-tabbed-terminal.openTerminal",
+        "command": "claude-remote-control.openTerminal",
         "title": "Open Claude Tabbed Terminal"
       }
     ],
     "keybindings": [
       {
-        "command": "claude-tabbed-terminal.openTerminal",
+        "command": "claude-remote-control.openTerminal",
         "key": "cmd+shift+c",
         "mac": "cmd+shift+c"
       }
