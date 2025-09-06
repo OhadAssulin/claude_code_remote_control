@@ -1,0 +1,1 @@
+- once you change the extnesion, please reinstall it
