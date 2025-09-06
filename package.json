@@ -19,7 +19,33 @@
         "command": "claude-tabbed-terminal.openTerminal",
         "title": "Open Claude Tabbed Terminal"
       }
-    ]
+    ],
+    "keybindings": [
+      {
+        "command": "claude-tabbed-terminal.openTerminal",
+        "key": "cmd+shift+c",
+        "mac": "cmd+shift+c"
+      }
+    ],
+    "viewsContainers": {
+      "panel": [
+        {
+          "id": "claude-terminal-container",
+          "title": "Claude Terminal",
+          "icon": "$(terminal)"
+        }
+      ]
+    },
+    "views": {
+      "claude-terminal-container": [
+        {
+          "id": "claude-terminal-panel",
+          "name": "Claude Terminal",
+          "type": "webview",
+          "when": "claudeTerminal.active"
+        }
+      ]
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
