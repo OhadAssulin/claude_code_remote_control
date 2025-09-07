@@ -188,7 +188,7 @@ class ClaudeTerminalProvider implements vscode.WebviewViewProvider {
                         const generalSettings = this.settingsManager.getGeneralSettings();
                         await this.createNewTerminal(generalSettings.defaultAgent);
                         
-                        // Send initial settings to webview
+                        // Send initial settings to webview to update JavaScript variables
                         if (this._view) {
                             this._view.webview.postMessage({
                                 type: 'generalSettingsLoaded',
@@ -1219,11 +1219,17 @@ class ClaudeTerminalProvider implements vscode.WebviewViewProvider {
                     
                     // Populate settings forms
                     function populateGeneralSettings(settings) {
-                        document.getElementById('defaultAgentInput').value = settings.defaultAgent || 'claude';
+                        const defaultAgent = settings.defaultAgent || 'claude';
                         
-                        // Update current terminal type to match loaded default
-                        defaultTerminalType = settings.defaultAgent || 'claude';
-                        currentTerminalType = defaultTerminalType;
+                        // Update General Settings UI dropdown
+                        const defaultAgentInput = document.getElementById('defaultAgentInput');
+                        if (defaultAgentInput) {
+                            defaultAgentInput.value = defaultAgent;
+                        }
+                        
+                        // Update JavaScript variables for terminal creation
+                        defaultTerminalType = defaultAgent;
+                        currentTerminalType = defaultAgent;
                         updateTerminalTypeIndicator(currentTerminalType);
                     }
 
