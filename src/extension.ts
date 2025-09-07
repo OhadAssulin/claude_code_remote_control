@@ -184,8 +184,17 @@ class ClaudeTerminalProvider implements vscode.WebviewViewProvider {
                         vscode.window.showErrorMessage(message.message);
                         break;
                     case 'webviewReady':
-                        // Create the first terminal when webview is fully loaded
-                        await this.createNewTerminal('claude');
+                        // Load general settings and create the first terminal with the saved default agent
+                        const generalSettings = this.settingsManager.getGeneralSettings();
+                        await this.createNewTerminal(generalSettings.defaultAgent);
+                        
+                        // Send initial settings to webview
+                        if (this._view) {
+                            this._view.webview.postMessage({
+                                type: 'generalSettingsLoaded',
+                                settings: generalSettings
+                            });
+                        }
                         break;
                     // No need for restoreTerminals with retainContextWhenHidden
                 }
@@ -1010,10 +1019,6 @@ class ClaudeTerminalProvider implements vscode.WebviewViewProvider {
 
                 // Initialize
                 document.addEventListener('DOMContentLoaded', () => {
-                    // Notify extension that webview is ready
-                    vscode.postMessage({
-                        type: 'webviewReady'
-                    });
                     document.getElementById('newTabButton').addEventListener('click', () => {
                         vscode.postMessage({
                             type: 'createTerminal',
@@ -1324,6 +1329,11 @@ class ClaudeTerminalProvider implements vscode.WebviewViewProvider {
                         if (!terminalTypeSelector.contains(e.target) && !terminalTypeDropdown.contains(e.target)) {
                             terminalTypeDropdown.classList.add('hidden');
                         }
+                    });
+                    
+                    // Notify extension that webview is ready (after all event listeners are set up)
+                    vscode.postMessage({
+                        type: 'webviewReady'
                     });
                 });
 
