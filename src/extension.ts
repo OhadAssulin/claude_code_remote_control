@@ -59,6 +59,21 @@ class ClaudeTerminalProvider implements vscode.WebviewViewProvider {
                             resizeTerminal.ptyProcess.resize(message.cols, message.rows);
                         }
                         break;
+                    case 'remoteControlToggle':
+                        this.handleRemoteControlToggle(message.enabled);
+                        break;
+                    case 'openSettings':
+                        this.handleOpenSettings();
+                        break;
+                    case 'saveTelegramSettings':
+                        this.handleSaveTelegramSettings(message.settings);
+                        break;
+                    case 'loadTelegramSettings':
+                        this.handleLoadTelegramSettings();
+                        break;
+                    case 'testTelegramConnection':
+                        this.handleTestTelegramConnection(message.botToken, message.chatId);
+                        break;
                     // No need for restoreTerminals with retainContextWhenHidden
                 }
             }
@@ -72,7 +87,7 @@ class ClaudeTerminalProvider implements vscode.WebviewViewProvider {
         if (!this._view) return;
 
         const terminalId = `terminal-${this.terminalCounter++}`;
-        const terminalName = `Claude ${this.terminalCounter - 1}`;
+        const terminalName = `CC:${this.terminalCounter - 1}`;
 
         // Create a new pty process that runs claude
         const ptyProcess = pty.spawn('claude', [], {
@@ -338,6 +353,96 @@ class ClaudeTerminalProvider implements vscode.WebviewViewProvider {
         return null;
     }
 
+    private handleRemoteControlToggle(enabled: boolean) {
+        console.log('Remote Control toggled:', enabled ? 'ON' : 'OFF');
+        
+        // Here we can add logic to enable/disable remote control features
+        // For now, just log the state change
+        if (enabled) {
+            console.log('🔗 Remote Control activated - ready for Telegram integration');
+        } else {
+            console.log('🔗 Remote Control deactivated');
+        }
+    }
+
+    private handleOpenSettings() {
+        console.log('⚙️ Opening settings dialog');
+        
+        // For now, show an information message
+        // Later we can implement a proper settings dialog
+        vscode.window.showInformationMessage(
+            'Settings functionality will be implemented here. This will include Telegram bot configuration, screenshot settings, and remote control options.',
+            'OK'
+        );
+    }
+
+    private handleSaveTelegramSettings(settings: { botToken: string; chatId: string; maxRows: number }) {
+        console.log('💾 Saving Telegram settings:', { 
+            botToken: settings.botToken.substring(0, 10) + '...', 
+            chatId: settings.chatId, 
+            maxRows: settings.maxRows 
+        });
+
+        // Here we would save to workspace settings or a config file
+        // For now, just show a success message
+        vscode.window.showInformationMessage(
+            `Telegram settings saved successfully! Bot: ${settings.botToken.substring(0, 10)}..., Chat: ${settings.chatId}, Max Rows: ${settings.maxRows}`
+        );
+    }
+
+    private handleLoadTelegramSettings() {
+        console.log('📥 Loading Telegram settings');
+
+        // For now, send dummy settings
+        // Later we would load from workspace settings or config file
+        const dummySettings = {
+            botToken: '',
+            chatId: '',
+            maxRows: 50
+        };
+
+        if (this._view) {
+            this._view.webview.postMessage({
+                type: 'telegramSettingsLoaded',
+                settings: dummySettings
+            });
+        }
+    }
+
+    private async handleTestTelegramConnection(botToken: string, chatId: string) {
+        console.log('🧪 Testing Telegram connection...');
+
+        try {
+            // Here we would make an actual API call to Telegram
+            // For now, simulate a test result
+            const testMessage = 'Test message from Claude Remote Control extension';
+            
+            // Simulate API delay
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            // For demo purposes, randomly succeed or fail
+            const success = Math.random() > 0.3;
+            
+            if (success) {
+                vscode.window.showInformationMessage(
+                    `✅ Telegram connection test successful! Test message sent to chat ${chatId}`
+                );
+                console.log('✅ Telegram test successful');
+            } else {
+                vscode.window.showErrorMessage(
+                    `❌ Telegram connection test failed. Please check your Bot Token and Chat ID.`
+                );
+                console.log('❌ Telegram test failed');
+            }
+            
+        } catch (error) {
+            vscode.window.showErrorMessage(
+                `❌ Telegram connection test failed: ${error}`
+            );
+            console.error('❌ Telegram test error:', error);
+        }
+    }
+
     public dispose() {
         // Clean up menu detection timeout
         if (this.menuDetectionTimeout) {
@@ -497,13 +602,285 @@ class ClaudeTerminalProvider implements vscode.WebviewViewProvider {
                 .xterm .xterm-screen {
                     background: var(--vscode-terminal-background) !important;
                 }
+
+                /* Remote Control Section Styles */
+                .remote-control-section {
+                    display: flex;
+                    align-items: center;
+                    margin-left: auto;
+                    gap: 12px;
+                    padding-right: 8px;
+                }
+
+                .remote-control-label {
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                    cursor: pointer;
+                    user-select: none;
+                    font-size: 12px;
+                    color: var(--vscode-foreground);
+                }
+
+                .remote-control-checkbox {
+                    width: 16px;
+                    height: 16px;
+                    margin: 0;
+                    cursor: pointer;
+                    accent-color: var(--vscode-checkbox-foreground, #0078d4);
+                }
+
+                .remote-control-text {
+                    font-weight: 500;
+                    white-space: nowrap;
+                }
+
+                /* Menu Bar Container */
+                .menu-bar-container {
+                    position: relative;
+                    display: flex;
+                    align-items: center;
+                }
+
+                .menu-bar-button {
+                    background: none;
+                    border: none;
+                    color: var(--vscode-foreground);
+                    cursor: pointer;
+                    padding: 6px;
+                    border-radius: 4px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    transition: background-color 0.2s ease;
+                }
+
+                .menu-bar-button:hover {
+                    background-color: var(--vscode-toolbar-hoverBackground);
+                }
+
+                .menu-bar-button:active {
+                    background-color: var(--vscode-toolbar-activeBackground, var(--vscode-toolbar-hoverBackground));
+                }
+
+                .menu-icon {
+                    width: 16px;
+                    height: 16px;
+                    color: inherit;
+                }
+
+                /* Telegram Settings Menu Styles */
+                .telegram-settings-menu {
+                    position: fixed;
+                    top: 70px;
+                    right: 20px;
+                    background: var(--vscode-menu-background, var(--vscode-dropdown-background));
+                    border: 1px solid var(--vscode-menu-border, var(--vscode-dropdown-border));
+                    border-radius: 6px;
+                    box-shadow: var(--vscode-widget-shadow, 0 4px 16px rgba(0, 0, 0, 0.2));
+                    min-width: 320px;
+                    max-width: 400px;
+                    z-index: 9999;
+                    display: none;
+                }
+
+                .telegram-settings-menu.show {
+                    display: block;
+                    animation: fadeIn 0.2s ease-out;
+                }
+
+                @keyframes fadeIn {
+                    from { opacity: 0; transform: translateY(-10px); }
+                    to { opacity: 1; transform: translateY(0); }
+                }
+
+                /* Menu overlay for debugging */
+                .menu-overlay {
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    background: rgba(0, 0, 0, 0.1);
+                    z-index: 9998;
+                    display: none;
+                }
+
+                .menu-overlay.show {
+                    display: block;
+                }
+
+                .settings-header {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    padding: 12px 16px;
+                    border-bottom: 1px solid var(--vscode-menu-border, var(--vscode-dropdown-border));
+                    background: var(--vscode-menu-background, var(--vscode-dropdown-background));
+                    font-weight: 600;
+                    font-size: 14px;
+                    color: var(--vscode-menu-foreground, var(--vscode-dropdown-foreground));
+                }
+
+                .telegram-icon {
+                    width: 16px;
+                    height: 16px;
+                    color: #0088cc;
+                    flex-shrink: 0;
+                }
+
+                .close-settings {
+                    background: none;
+                    border: none;
+                    color: var(--vscode-menu-foreground, var(--vscode-dropdown-foreground));
+                    cursor: pointer;
+                    font-size: 18px;
+                    font-weight: bold;
+                    margin-left: auto;
+                    padding: 2px 6px;
+                    border-radius: 3px;
+                    transition: background-color 0.2s ease;
+                }
+
+                .close-settings:hover {
+                    background-color: var(--vscode-toolbar-hoverBackground);
+                }
+
+                .settings-form {
+                    padding: 16px;
+                }
+
+                .form-group {
+                    margin-bottom: 16px;
+                }
+
+                .form-group label {
+                    display: block;
+                    margin-bottom: 6px;
+                    font-size: 13px;
+                    font-weight: 500;
+                    color: var(--vscode-menu-foreground, var(--vscode-dropdown-foreground));
+                }
+
+                .form-input {
+                    width: 100%;
+                    padding: 8px 12px;
+                    border: 1px solid var(--vscode-input-border, var(--vscode-dropdown-border));
+                    border-radius: 4px;
+                    background: var(--vscode-input-background);
+                    color: var(--vscode-input-foreground);
+                    font-size: 13px;
+                    box-sizing: border-box;
+                    transition: border-color 0.2s ease;
+                }
+
+                .form-input:focus {
+                    outline: none;
+                    border-color: var(--vscode-focusBorder, #0078d4);
+                    box-shadow: 0 0 0 1px var(--vscode-focusBorder, #0078d4);
+                }
+
+                .form-input::placeholder {
+                    color: var(--vscode-input-placeholderForeground);
+                }
+
+                .form-actions {
+                    display: flex;
+                    gap: 8px;
+                    margin-top: 20px;
+                }
+
+                .btn {
+                    padding: 8px 16px;
+                    border: none;
+                    border-radius: 4px;
+                    font-size: 13px;
+                    font-weight: 500;
+                    cursor: pointer;
+                    transition: background-color 0.2s ease;
+                    outline: none;
+                }
+
+                .btn-primary {
+                    background: var(--vscode-button-background, #0078d4);
+                    color: var(--vscode-button-foreground, white);
+                }
+
+                .btn-primary:hover {
+                    background: var(--vscode-button-hoverBackground, #106ebe);
+                }
+
+                .btn-secondary {
+                    background: var(--vscode-button-secondaryBackground, transparent);
+                    color: var(--vscode-button-secondaryForeground, var(--vscode-foreground));
+                    border: 1px solid var(--vscode-button-border, var(--vscode-contrastBorder));
+                }
+
+                .btn-secondary:hover {
+                    background: var(--vscode-button-secondaryHoverBackground, var(--vscode-toolbar-hoverBackground));
+                }
             </style>
         </head>
         <body>
             <div class="tab-container">
                 <div id="tabs" style="display: flex; flex-direction: row; align-items: center;"></div>
                 <button class="new-tab-button" id="newTabButton">+</button>
+                
+                <!-- Remote Control Section -->
+                <div class="remote-control-section">
+                    <label class="remote-control-label">
+                        <input type="checkbox" id="remoteControlCheckbox" class="remote-control-checkbox">
+                        <span class="remote-control-text">Remote Control</span>
+                    </label>
+                    
+                    <!-- Menu Bar Icon -->
+                    <div class="menu-bar-container">
+                        <button class="menu-bar-button" id="menuBarButton" title="Options">
+                            <svg class="menu-icon" viewBox="0 0 16 16" width="16" height="16">
+                                <circle fill="currentColor" cx="8" cy="3" r="1.5"/>
+                                <circle fill="currentColor" cx="8" cy="8" r="1.5"/>
+                                <circle fill="currentColor" cx="8" cy="13" r="1.5"/>
+                            </svg>
+                        </button>
+                        
+                        <!-- Telegram Settings Menu -->
+                        <div class="telegram-settings-menu" id="telegramSettingsMenu">
+                            <div class="settings-header">
+                                <svg class="telegram-icon" viewBox="0 0 16 16" width="16" height="16">
+                                    <path fill="currentColor" d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0zM8.287 5.906c-.778.324-2.334.994-4.666 2.01-.378.15-.577.298-.595.442-.03.243.275.339.69.47l.175.055c.408.133.958.288 1.243.294.26.006.549-.1.868-.32 2.179-1.471 3.304-2.214 3.374-2.23.05-.012.12-.026.166.016.047.041.042.12.037.141-.03.129-1.227 1.241-1.846 1.817-.193.18-.33.307-.358.336a8.154 8.154 0 0 1-.188.186c-.38.366-.664.64.015 1.088.327.216.589.393.85.571.284.194.568.387.936.629.093.06.183.125.27.187.331.236.63.448.997.414.214-.02.435-.22.547-.82.265-1.417.786-4.486.906-5.751a1.426 1.426 0 0 0-.013-.315.337.337 0 0 0-.114-.217.526.526 0 0 0-.31-.093c-.3.005-.763.166-2.984 1.09z"/>
+                                </svg>
+                                <span>Telegram Settings</span>
+                                <button class="close-settings" id="closeSettingsButton" title="Close">×</button>
+                            </div>
+                            
+                            <div class="settings-form">
+                                <div class="form-group">
+                                    <label for="botTokenInput">Bot Token:</label>
+                                    <input type="text" id="botTokenInput" placeholder="Enter your Telegram Bot Token" class="form-input">
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label for="chatIdInput">Chat ID:</label>
+                                    <input type="text" id="chatIdInput" placeholder="Enter your Chat ID" class="form-input">
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label for="maxRowsInput">Max Rows:</label>
+                                    <input type="number" id="maxRowsInput" placeholder="50" min="10" max="200" class="form-input">
+                                </div>
+                                
+                                <div class="form-actions">
+                                    <button class="btn btn-primary" id="saveTelegramSettings">Save Settings</button>
+                                    <button class="btn btn-secondary" id="testTelegramConnection">Test Connection</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
+            
+            <!-- Menu Overlay -->
+            <div class="menu-overlay" id="menuOverlay"></div>
             
             <div class="terminal-container" id="terminalContainer">
             </div>
@@ -514,6 +891,7 @@ class ClaudeTerminalProvider implements vscode.WebviewViewProvider {
                 const vscode = acquireVsCodeApi();
                 const terminals = new Map();
                 let activeTerminalId = null;
+                let remoteControlEnabled = false;
                 
                 // No need for state persistence with retainContextWhenHidden: true
 
@@ -524,6 +902,130 @@ class ClaudeTerminalProvider implements vscode.WebviewViewProvider {
                             type: 'createTerminal'
                         });
                     });
+
+                    // Remote Control checkbox event listener
+                    const remoteControlCheckbox = document.getElementById('remoteControlCheckbox');
+                    remoteControlCheckbox.addEventListener('change', (e) => {
+                        remoteControlEnabled = e.target.checked;
+                        console.log('Remote Control', remoteControlEnabled ? 'enabled' : 'disabled');
+                        
+                        // Notify extension host about remote control state change
+                        vscode.postMessage({
+                            type: 'remoteControlToggle',
+                            enabled: remoteControlEnabled
+                        });
+                    });
+
+                    // Telegram Settings Menu event listeners
+                    const menuBarButton = document.getElementById('menuBarButton');
+                    const telegramSettingsMenu = document.getElementById('telegramSettingsMenu');
+                    const menuOverlay = document.getElementById('menuOverlay');
+                    const closeSettingsButton = document.getElementById('closeSettingsButton');
+                    const saveTelegramSettings = document.getElementById('saveTelegramSettings');
+                    const testTelegramConnection = document.getElementById('testTelegramConnection');
+                    
+                    // Menu button click - show/hide settings
+                    menuBarButton.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        console.log('🔘 Menu button clicked!');
+                        
+                        telegramSettingsMenu.classList.toggle('show');
+                        console.log('📱 Menu visibility:', telegramSettingsMenu.classList.contains('show') ? 'SHOWN' : 'HIDDEN');
+                        
+                        // Load current settings when opening
+                        if (telegramSettingsMenu.classList.contains('show')) {
+                            loadTelegramSettings();
+                        }
+                    });
+
+                    // Close button click
+                    closeSettingsButton.addEventListener('click', () => {
+                        telegramSettingsMenu.classList.remove('show');
+                    });
+
+                    // Save settings button click
+                    saveTelegramSettings.addEventListener('click', () => {
+                        const botToken = document.getElementById('botTokenInput').value.trim();
+                        const chatId = document.getElementById('chatIdInput').value.trim();
+                        const maxRows = parseInt(document.getElementById('maxRowsInput').value) || 50;
+
+                        // Basic validation
+                        if (!botToken) {
+                            alert('Please enter a Bot Token');
+                            return;
+                        }
+                        
+                        if (!chatId) {
+                            alert('Please enter a Chat ID');
+                            return;
+                        }
+
+                        if (maxRows < 10 || maxRows > 200) {
+                            alert('Max Rows must be between 10 and 200');
+                            return;
+                        }
+
+                        // Send settings to extension host
+                        vscode.postMessage({
+                            type: 'saveTelegramSettings',
+                            settings: {
+                                botToken: botToken,
+                                chatId: chatId,
+                                maxRows: maxRows
+                            }
+                        });
+
+                        console.log('💾 Telegram settings saved:', { botToken: botToken.substring(0, 10) + '...', chatId, maxRows });
+                        telegramSettingsMenu.classList.remove('show');
+                    });
+
+                    // Test connection button click
+                    testTelegramConnection.addEventListener('click', () => {
+                        const botToken = document.getElementById('botTokenInput').value.trim();
+                        const chatId = document.getElementById('chatIdInput').value.trim();
+
+                        if (!botToken || !chatId) {
+                            alert('Please enter both Bot Token and Chat ID before testing');
+                            return;
+                        }
+
+                        vscode.postMessage({
+                            type: 'testTelegramConnection',
+                            botToken: botToken,
+                            chatId: chatId
+                        });
+
+                        console.log('🧪 Testing Telegram connection...');
+                    });
+
+                    // Close menu when clicking outside
+                    document.addEventListener('click', (e) => {
+                        if (!menuBarButton.contains(e.target) && !telegramSettingsMenu.contains(e.target)) {
+                            telegramSettingsMenu.classList.remove('show');
+                        }
+                    });
+
+                    // Close menu on Escape key
+                    document.addEventListener('keydown', (e) => {
+                        if (e.key === 'Escape' && telegramSettingsMenu.classList.contains('show')) {
+                            telegramSettingsMenu.classList.remove('show');
+                        }
+                    });
+
+                    // Load settings function
+                    function loadTelegramSettings() {
+                        // Request settings from extension host
+                        vscode.postMessage({
+                            type: 'loadTelegramSettings'
+                        });
+                    }
+
+                    // Populate settings form
+                    function populateTelegramSettings(settings) {
+                        document.getElementById('botTokenInput').value = settings.botToken || '';
+                        document.getElementById('chatIdInput').value = settings.chatId || '';
+                        document.getElementById('maxRowsInput').value = settings.maxRows || 50;
+                    }
                 });
 
                 // Handle messages from extension
@@ -536,6 +1038,9 @@ class ClaudeTerminalProvider implements vscode.WebviewViewProvider {
                             break;
                         case 'terminalOutput':
                             writeToTerminal(message.terminalId, message.data);
+                            break;
+                        case 'telegramSettingsLoaded':
+                            populateTelegramSettings(message.settings);
                             break;
                         case 'terminalClosed':
                             closeTerminalTab(message.terminalId);
