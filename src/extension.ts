@@ -74,6 +74,9 @@ class ClaudeTerminalProvider implements vscode.WebviewViewProvider {
                     case 'testTelegramConnection':
                         this.handleTestTelegramConnection(message.botToken, message.chatId);
                         break;
+                    case 'showError':
+                        vscode.window.showErrorMessage(message.message);
+                        break;
                     // No need for restoreTerminals with retainContextWhenHidden
                 }
             }
@@ -470,129 +473,44 @@ class ClaudeTerminalProvider implements vscode.WebviewViewProvider {
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src ${webview.cspSource} 'unsafe-inline' 'unsafe-eval'; font-src ${webview.cspSource};">
+            <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline' https://cdn.tailwindcss.com; script-src ${webview.cspSource} 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com; font-src ${webview.cspSource}; connect-src https://cdn.tailwindcss.com;">
             <title>Claude Tabbed Terminal</title>
             <link rel="stylesheet" href="${xtermCssUri}">
+            <script src="https://cdn.tailwindcss.com"></script>
+            <script>
+                tailwind.config = {
+                    theme: {
+                        extend: {
+                            colors: {
+                                vscode: {
+                                    bg: 'var(--vscode-panel-background)',
+                                    fg: 'var(--vscode-foreground)',
+                                    border: 'var(--vscode-panel-border)',
+                                    hover: 'var(--vscode-toolbar-hoverBackground)',
+                                    active: 'var(--vscode-tab-activeBackground)',
+                                    inactive: 'var(--vscode-tab-inactiveBackground)',
+                                    focus: 'var(--vscode-focusBorder)',
+                                }
+                            }
+                        }
+                    }
+                }
+            </script>
             <style>
+                /* Base styles and xterm compatibility */
                 body {
                     margin: 0;
                     padding: 0;
-                    font-family: 'Courier New', monospace;
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
                     background-color: var(--vscode-panel-background);
                     color: var(--vscode-foreground);
                     overflow: hidden;
                     height: 100vh;
                 }
                 
-                .tab-container {
-                    display: flex;
-                    flex-direction: row;
-                    background-color: var(--vscode-tab-inactiveBackground);
-                    border-bottom: 1px solid var(--vscode-panel-border);
-                    height: 35px;
-                    align-items: stretch;
-                    padding: 0 8px;
-                    overflow-x: auto;
-                    flex-shrink: 0;
-                    min-height: 35px;
-                }
-                
-                #tabs {
-                    display: flex !important;
-                    flex-direction: row !important;
-                    align-items: center !important;
-                    gap: 2px;
-                }
-                
-                .tab {
-                    background-color: var(--vscode-tab-inactiveBackground);
-                    border: 1px solid var(--vscode-tab-border);
-                    border-bottom: none;
-                    padding: 6px 12px;
-                    cursor: pointer;
-                    display: inline-flex !important;
-                    flex-direction: row !important;
-                    align-items: center;
-                    min-width: 80px;
-                    max-width: 150px;
-                    position: relative;
-                    font-size: 12px;
-                    white-space: nowrap;
-                    flex-shrink: 0;
-                    height: 28px;
-                    box-sizing: border-box;
-                }
-                
-                .tab.active {
-                    background-color: var(--vscode-tab-activeBackground);
-                    border-color: var(--vscode-tab-activeBorder, var(--vscode-focusBorder));
-                }
-                
-                .tab-name {
-                    flex-grow: 1;
-                    overflow: hidden;
-                    text-overflow: ellipsis;
-                }
-                
-                .tab-close {
-                    margin-left: 6px;
-                    width: 14px;
-                    height: 14px;
-                    background: none;
-                    border: none;
-                    color: var(--vscode-foreground);
-                    cursor: pointer;
-                    font-size: 10px;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    border-radius: 2px;
-                }
-                
-                .tab-close:hover {
-                    background-color: var(--vscode-toolbar-hoverBackground);
-                }
-                
-                .new-tab-button {
-                    background-color: var(--vscode-button-background);
-                    border: 1px solid var(--vscode-button-border, transparent);
-                    color: var(--vscode-button-foreground);
-                    padding: 4px 8px;
-                    cursor: pointer;
-                    margin-left: 8px;
-                    font-size: 12px;
-                    border-radius: 2px;
-                }
-                
-                .new-tab-button:hover {
-                    background-color: var(--vscode-button-hoverBackground);
-                }
-                
-                .terminal-container {
-                    height: calc(100vh - 35px);
-                    display: flex;
-                    flex-direction: column;
-                    flex-grow: 1;
-                }
-                
-                .terminal-pane {
-                    display: none;
-                    height: 100%;
-                    flex-grow: 1;
-                }
-                
-                .terminal-pane.active {
-                    display: block;
-                }
-                
-                .terminal {
-                    height: 100%;
-                    padding: 0;
-                    background: var(--vscode-terminal-background);
-                }
-                
                 .xterm {
-                    padding: 8px !important;
+                    padding: 12px !important;
+                    font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', 'Fira Mono', 'Droid Sans Mono', 'Consolas', monospace !important;
                 }
                 
                 .xterm .xterm-viewport {
@@ -603,275 +521,171 @@ class ClaudeTerminalProvider implements vscode.WebviewViewProvider {
                     background: var(--vscode-terminal-background) !important;
                 }
 
-                /* Remote Control Section Styles */
-                .remote-control-section {
-                    display: flex;
-                    align-items: center;
-                    margin-left: auto;
-                    gap: 12px;
-                    padding-right: 8px;
-                }
-
-                .remote-control-label {
-                    display: flex;
-                    align-items: center;
-                    gap: 6px;
-                    cursor: pointer;
-                    user-select: none;
-                    font-size: 12px;
-                    color: var(--vscode-foreground);
-                }
-
-                .remote-control-checkbox {
-                    width: 16px;
-                    height: 16px;
-                    margin: 0;
-                    cursor: pointer;
-                    accent-color: var(--vscode-checkbox-foreground, #0078d4);
-                }
-
-                .remote-control-text {
-                    font-weight: 500;
-                    white-space: nowrap;
-                }
-
-                /* Menu Bar Container */
-                .menu-bar-container {
-                    position: relative;
-                    display: flex;
-                    align-items: center;
-                }
-
-                .menu-bar-button {
-                    background: none;
-                    border: none;
-                    color: var(--vscode-foreground);
-                    cursor: pointer;
-                    padding: 6px;
-                    border-radius: 4px;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    transition: background-color 0.2s ease;
-                }
-
-                .menu-bar-button:hover {
-                    background-color: var(--vscode-toolbar-hoverBackground);
-                }
-
-                .menu-bar-button:active {
-                    background-color: var(--vscode-toolbar-activeBackground, var(--vscode-toolbar-hoverBackground));
-                }
-
-                .menu-icon {
-                    width: 16px;
-                    height: 16px;
-                    color: inherit;
-                }
-
-                /* Telegram Settings Menu Styles */
-                .telegram-settings-menu {
-                    position: fixed;
-                    top: 70px;
-                    right: 20px;
-                    background: var(--vscode-menu-background, var(--vscode-dropdown-background));
-                    border: 1px solid var(--vscode-menu-border, var(--vscode-dropdown-border));
-                    border-radius: 6px;
-                    box-shadow: var(--vscode-widget-shadow, 0 4px 16px rgba(0, 0, 0, 0.2));
-                    min-width: 320px;
-                    max-width: 400px;
-                    z-index: 9999;
-                    display: none;
-                }
-
-                .telegram-settings-menu.show {
-                    display: block;
-                    animation: fadeIn 0.2s ease-out;
-                }
-
-                @keyframes fadeIn {
-                    from { opacity: 0; transform: translateY(-10px); }
-                    to { opacity: 1; transform: translateY(0); }
-                }
-
-                /* Menu overlay for debugging */
-                .menu-overlay {
-                    position: fixed;
-                    top: 0;
-                    left: 0;
-                    width: 100%;
+                /* Terminal container */
+                .terminal {
                     height: 100%;
-                    background: rgba(0, 0, 0, 0.1);
-                    z-index: 9998;
-                    display: none;
+                    padding: 0;
+                    background: var(--vscode-terminal-background, #1e1e1e) !important;
                 }
 
-                .menu-overlay.show {
-                    display: block;
+                /* Custom scrollbar for webkit browsers */
+                ::-webkit-scrollbar {
+                    width: 6px;
+                    height: 6px;
                 }
 
-                .settings-header {
-                    display: flex;
-                    align-items: center;
-                    gap: 8px;
-                    padding: 12px 16px;
-                    border-bottom: 1px solid var(--vscode-menu-border, var(--vscode-dropdown-border));
-                    background: var(--vscode-menu-background, var(--vscode-dropdown-background));
-                    font-weight: 600;
-                    font-size: 14px;
-                    color: var(--vscode-menu-foreground, var(--vscode-dropdown-foreground));
+                ::-webkit-scrollbar-track {
+                    background: transparent;
                 }
 
-                .telegram-icon {
-                    width: 16px;
-                    height: 16px;
-                    color: #0088cc;
-                    flex-shrink: 0;
-                }
-
-                .close-settings {
-                    background: none;
-                    border: none;
-                    color: var(--vscode-menu-foreground, var(--vscode-dropdown-foreground));
-                    cursor: pointer;
-                    font-size: 18px;
-                    font-weight: bold;
-                    margin-left: auto;
-                    padding: 2px 6px;
+                ::-webkit-scrollbar-thumb {
+                    background: var(--vscode-scrollbarSlider-background);
                     border-radius: 3px;
-                    transition: background-color 0.2s ease;
                 }
 
-                .close-settings:hover {
-                    background-color: var(--vscode-toolbar-hoverBackground);
+                ::-webkit-scrollbar-thumb:hover {
+                    background: var(--vscode-scrollbarSlider-hoverBackground);
                 }
 
-                .settings-form {
-                    padding: 16px;
+                /* Custom toggle switch styles */
+                #remoteControlCheckbox:checked + .toggle-bg {
+                    background-color: #3b82f6;
                 }
 
-                .form-group {
-                    margin-bottom: 16px;
+                #remoteControlCheckbox:checked + .toggle-bg .toggle-dot {
+                    transform: translateX(20px);
                 }
 
-                .form-group label {
+                /* Terminal pane styles */
+                .terminal-pane {
+                    display: none;
+                    height: calc(100vh - 3rem);
+                    flex-grow: 1;
+                    background-color: var(--vscode-terminal-background, #1e1e1e) !important;
+                }
+
+                .terminal-pane.active {
                     display: block;
-                    margin-bottom: 6px;
-                    font-size: 13px;
-                    font-weight: 500;
-                    color: var(--vscode-menu-foreground, var(--vscode-dropdown-foreground));
+                    background-color: var(--vscode-terminal-background, #1e1e1e) !important;
                 }
 
-                .form-input {
-                    width: 100%;
-                    padding: 8px 12px;
-                    border: 1px solid var(--vscode-input-border, var(--vscode-dropdown-border));
-                    border-radius: 4px;
-                    background: var(--vscode-input-background);
-                    color: var(--vscode-input-foreground);
-                    font-size: 13px;
-                    box-sizing: border-box;
-                    transition: border-color 0.2s ease;
+                /* Hide/show settings menu */
+                .settings-menu-hidden {
+                    display: none !important;
                 }
-
-                .form-input:focus {
-                    outline: none;
-                    border-color: var(--vscode-focusBorder, #0078d4);
-                    box-shadow: 0 0 0 1px var(--vscode-focusBorder, #0078d4);
-                }
-
-                .form-input::placeholder {
-                    color: var(--vscode-input-placeholderForeground);
-                }
-
-                .form-actions {
-                    display: flex;
-                    gap: 8px;
-                    margin-top: 20px;
-                }
-
-                .btn {
-                    padding: 8px 16px;
-                    border: none;
-                    border-radius: 4px;
-                    font-size: 13px;
-                    font-weight: 500;
-                    cursor: pointer;
-                    transition: background-color 0.2s ease;
-                    outline: none;
-                }
-
-                .btn-primary {
-                    background: var(--vscode-button-background, #0078d4);
-                    color: var(--vscode-button-foreground, white);
-                }
-
-                .btn-primary:hover {
-                    background: var(--vscode-button-hoverBackground, #106ebe);
-                }
-
-                .btn-secondary {
-                    background: var(--vscode-button-secondaryBackground, transparent);
-                    color: var(--vscode-button-secondaryForeground, var(--vscode-foreground));
-                    border: 1px solid var(--vscode-button-border, var(--vscode-contrastBorder));
-                }
-
-                .btn-secondary:hover {
-                    background: var(--vscode-button-secondaryHoverBackground, var(--vscode-toolbar-hoverBackground));
+                
+                .settings-menu-visible {
+                    display: block !important;
                 }
             </style>
         </head>
-        <body>
-            <div class="tab-container">
-                <div id="tabs" style="display: flex; flex-direction: row; align-items: center;"></div>
-                <button class="new-tab-button" id="newTabButton">+</button>
+        <body class="bg-vscode-bg text-vscode-fg overflow-hidden h-screen">
+            <!-- Modern Tab Bar -->
+            <div class="flex items-center justify-between h-12 px-4 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 border-b border-gray-200 dark:border-gray-700 shadow-sm">
+                <!-- Tab Container -->
+                <div class="flex items-center space-x-1">
+                    <div id="tabs" class="flex space-x-1"></div>
+                    <button class="ml-2 inline-flex items-center justify-center w-8 h-8 rounded-lg bg-blue-500 hover:bg-blue-600 text-white transition-all duration-200 hover:scale-105 shadow-md" id="newTabButton">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                        </svg>
+                    </button>
+                </div>
                 
                 <!-- Remote Control Section -->
-                <div class="remote-control-section">
-                    <label class="remote-control-label">
-                        <input type="checkbox" id="remoteControlCheckbox" class="remote-control-checkbox">
-                        <span class="remote-control-text">Remote Control</span>
+                <div class="flex items-center space-x-4">
+                    <!-- Remote Control Toggle -->
+                    <label class="flex items-center space-x-2 cursor-pointer group">
+                        <div class="relative">
+                            <input type="checkbox" id="remoteControlCheckbox" class="sr-only">
+                            <div class="toggle-bg w-11 h-6 bg-gray-200 dark:bg-gray-600 rounded-full shadow-inner transition-colors duration-300"></div>
+                            <div class="toggle-dot absolute w-4 h-4 bg-white rounded-full shadow-md transform transition-transform duration-300 top-1 left-1"></div>
+                        </div>
+                        <span class="text-sm font-medium text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-white transition-colors">
+                            Remote Control
+                        </span>
                     </label>
                     
-                    <!-- Menu Bar Icon -->
-                    <div class="menu-bar-container">
-                        <button class="menu-bar-button" id="menuBarButton" title="Options">
-                            <svg class="menu-icon" viewBox="0 0 16 16" width="16" height="16">
-                                <circle fill="currentColor" cx="8" cy="3" r="1.5"/>
-                                <circle fill="currentColor" cx="8" cy="8" r="1.5"/>
-                                <circle fill="currentColor" cx="8" cy="13" r="1.5"/>
+                    <!-- Settings Menu Button -->
+                    <div class="relative">
+                        <button class="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600 transition-all duration-200 shadow-sm hover:shadow-md" id="menuBarButton" title="Settings">
+                                <svg class="w-4 h-4 text-gray-600 dark:text-gray-400" fill="currentColor" viewBox="0 0 16 16">
+                                <circle cx="8" cy="3" r="1.5"/>
+                                <circle cx="8" cy="8" r="1.5"/>
+                                <circle cx="8" cy="13" r="1.5"/>
                             </svg>
                         </button>
                         
-                        <!-- Telegram Settings Menu -->
-                        <div class="telegram-settings-menu" id="telegramSettingsMenu">
-                            <div class="settings-header">
-                                <svg class="telegram-icon" viewBox="0 0 16 16" width="16" height="16">
-                                    <path fill="currentColor" d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0zM8.287 5.906c-.778.324-2.334.994-4.666 2.01-.378.15-.577.298-.595.442-.03.243.275.339.69.47l.175.055c.408.133.958.288 1.243.294.26.006.549-.1.868-.32 2.179-1.471 3.304-2.214 3.374-2.23.05-.012.12-.026.166.016.047.041.042.12.037.141-.03.129-1.227 1.241-1.846 1.817-.193.18-.33.307-.358.336a8.154 8.154 0 0 1-.188.186c-.38.366-.664.64.015 1.088.327.216.589.393.85.571.284.194.568.387.936.629.093.06.183.125.27.187.331.236.63.448.997.414.214-.02.435-.22.547-.82.265-1.417.786-4.486.906-5.751a1.426 1.426 0 0 0-.013-.315.337.337 0 0 0-.114-.217.526.526 0 0 0-.31-.093c-.3.005-.763.166-2.984 1.09z"/>
-                                </svg>
-                                <span>Telegram Settings</span>
-                                <button class="close-settings" id="closeSettingsButton" title="Close">×</button>
+                        <!-- Modern Settings Dropdown -->
+                        <div class="absolute right-0 top-12 w-80 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl z-50 hidden animate-in fade-in-0 zoom-in-95 duration-200" id="telegramSettingsMenu">
+                            <!-- Header -->
+                            <div class="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-t-xl">
+                                <div class="flex items-center space-x-2">
+                                    <div class="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center">
+                                        <svg class="w-5 h-5 text-white" viewBox="0 0 24 24" fill="currentColor">
+                                            <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.820 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/>
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <h3 class="font-semibold text-gray-900 dark:text-white">Telegram Settings</h3>
+                                        <p class="text-xs text-gray-500 dark:text-gray-400">Configure your bot connection</p>
+                                    </div>
+                                </div>
+                                <button class="w-8 h-8 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center justify-center transition-colors" id="closeSettingsButton" title="Close">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                    </svg>
+                                </button>
                             </div>
                             
-                            <div class="settings-form">
-                                <div class="form-group">
-                                    <label for="botTokenInput">Bot Token:</label>
-                                    <input type="text" id="botTokenInput" placeholder="Enter your Telegram Bot Token" class="form-input">
+                            <!-- Form Content -->
+                            <div class="p-4 space-y-4">
+                                <div class="space-y-2">
+                                    <label for="botTokenInput" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        Bot Token
+                                    </label>
+                                    <input 
+                                        type="text" 
+                                        id="botTokenInput" 
+                                        placeholder="1234567890:ABCdefGHIjklMNOpqrsTUVwxyz" 
+                                        class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:focus:ring-blue-400 text-sm transition-colors"
+                                    >
                                 </div>
                                 
-                                <div class="form-group">
-                                    <label for="chatIdInput">Chat ID:</label>
-                                    <input type="text" id="chatIdInput" placeholder="Enter your Chat ID" class="form-input">
+                                <div class="space-y-2">
+                                    <label for="chatIdInput" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        Chat ID
+                                    </label>
+                                    <input 
+                                        type="text" 
+                                        id="chatIdInput" 
+                                        placeholder="123456789" 
+                                        class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:focus:ring-blue-400 text-sm transition-colors"
+                                    >
                                 </div>
                                 
-                                <div class="form-group">
-                                    <label for="maxRowsInput">Max Rows:</label>
-                                    <input type="number" id="maxRowsInput" placeholder="50" min="10" max="200" class="form-input">
+                                <div class="space-y-2">
+                                    <label for="maxRowsInput" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        Max Rows
+                                    </label>
+                                    <input 
+                                        type="number" 
+                                        id="maxRowsInput" 
+                                        placeholder="50" 
+                                        min="10" 
+                                        max="200" 
+                                        class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:focus:ring-blue-400 text-sm transition-colors"
+                                    >
                                 </div>
                                 
-                                <div class="form-actions">
-                                    <button class="btn btn-primary" id="saveTelegramSettings">Save Settings</button>
-                                    <button class="btn btn-secondary" id="testTelegramConnection">Test Connection</button>
+                                <!-- Action Buttons -->
+                                <div class="flex space-x-2 pt-2">
+                                    <button class="flex-1 bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200 shadow-sm hover:shadow-md" id="saveTelegramSettings">
+                                        Save Settings
+                                    </button>
+                                    <button class="flex-1 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 font-medium py-2 px-4 rounded-lg transition-colors duration-200" id="testTelegramConnection">
+                                        Test Connection
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -879,10 +693,57 @@ class ClaudeTerminalProvider implements vscode.WebviewViewProvider {
                 </div>
             </div>
             
-            <!-- Menu Overlay -->
-            <div class="menu-overlay" id="menuOverlay"></div>
-            
-            <div class="terminal-container" id="terminalContainer">
+            <!-- Terminal Container -->
+            <div class="flex-1" id="terminalContainer" style="background-color: var(--vscode-terminal-background, #1e1e1e);">
+            </div>
+
+            <!-- Tab Context Menu -->
+            <div id="tabContextMenu" class="fixed bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl z-50 hidden py-2 min-w-48">
+                <button class="w-full text-left px-4 py-2 text-gray-900 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center space-x-2" id="renameTabOption">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path>
+                    </svg>
+                    <span>Rename Tab</span>
+                </button>
+                <button class="w-full text-left px-4 py-2 text-gray-900 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center space-x-2" id="changeColorOption">
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                        <circle cx="12" cy="12" r="3"/>
+                    </svg>
+                    <span>Change Color</span>
+                </button>
+                <hr class="my-1 border-gray-200 dark:border-gray-600">
+                <button class="w-full text-left px-4 py-2 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 flex items-center space-x-2" id="closeTabOption">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                    <span>Close Tab</span>
+                </button>
+            </div>
+
+            <!-- Rename Tab Modal -->
+            <div id="renameModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+                <div class="bg-white dark:bg-gray-800 rounded-xl p-6 max-w-sm w-full mx-4">
+                    <h3 class="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Rename Tab</h3>
+                    <input type="text" id="renameInput" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 mb-4" placeholder="Enter tab name">
+                    <div class="flex justify-end space-x-2">
+                        <button id="cancelRename" class="px-4 py-2 text-gray-900 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg border border-gray-300 dark:border-gray-600">Cancel</button>
+                        <button id="applyRename" class="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg">Rename</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Color Picker Modal -->
+            <div id="colorPickerModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+                <div class="bg-white dark:bg-gray-800 rounded-xl p-6 max-w-sm w-full mx-4">
+                    <h3 class="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Choose Tab Color</h3>
+                    <div class="grid grid-cols-6 gap-2 mb-4" id="colorOptions">
+                        <!-- Color options will be populated by JavaScript -->
+                    </div>
+                    <div class="flex justify-end space-x-2">
+                        <button id="cancelColorPicker" class="px-4 py-2 text-gray-900 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg border border-gray-300 dark:border-gray-600">Cancel</button>
+                        <button id="applyColorPicker" class="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg">Apply</button>
+                    </div>
+                </div>
             </div>
 
             <script src="${xtermUri}"></script>
@@ -905,9 +766,23 @@ class ClaudeTerminalProvider implements vscode.WebviewViewProvider {
 
                     // Remote Control checkbox event listener
                     const remoteControlCheckbox = document.getElementById('remoteControlCheckbox');
+                    // Modern toggle switch functionality
                     remoteControlCheckbox.addEventListener('change', (e) => {
                         remoteControlEnabled = e.target.checked;
-                        console.log('Remote Control', remoteControlEnabled ? 'enabled' : 'disabled');
+                        
+                        // Update toggle switch appearance
+                        const toggleBg = document.querySelector('.toggle-bg');
+                        const toggleDot = document.querySelector('.toggle-dot');
+                        
+                        if (remoteControlEnabled) {
+                            toggleBg.classList.remove('bg-gray-200', 'dark:bg-gray-600');
+                            toggleBg.classList.add('bg-blue-500');
+                            toggleDot.classList.add('translate-x-5');
+                        } else {
+                            toggleBg.classList.remove('bg-blue-500');
+                            toggleBg.classList.add('bg-gray-200', 'dark:bg-gray-600');
+                            toggleDot.classList.remove('translate-x-5');
+                        }
                         
                         // Notify extension host about remote control state change
                         vscode.postMessage({
@@ -927,20 +802,20 @@ class ClaudeTerminalProvider implements vscode.WebviewViewProvider {
                     // Menu button click - show/hide settings
                     menuBarButton.addEventListener('click', (e) => {
                         e.stopPropagation();
-                        console.log('🔘 Menu button clicked!');
                         
-                        telegramSettingsMenu.classList.toggle('show');
-                        console.log('📱 Menu visibility:', telegramSettingsMenu.classList.contains('show') ? 'SHOWN' : 'HIDDEN');
-                        
-                        // Load current settings when opening
-                        if (telegramSettingsMenu.classList.contains('show')) {
+                        // Toggle modern menu visibility
+                        const isHidden = telegramSettingsMenu.classList.contains('hidden');
+                        if (isHidden) {
+                            telegramSettingsMenu.classList.remove('hidden');
                             loadTelegramSettings();
+                        } else {
+                            telegramSettingsMenu.classList.add('hidden');
                         }
                     });
 
                     // Close button click
                     closeSettingsButton.addEventListener('click', () => {
-                        telegramSettingsMenu.classList.remove('show');
+                        telegramSettingsMenu.classList.add('hidden');
                     });
 
                     // Save settings button click
@@ -951,17 +826,26 @@ class ClaudeTerminalProvider implements vscode.WebviewViewProvider {
 
                         // Basic validation
                         if (!botToken) {
-                            alert('Please enter a Bot Token');
+                            vscode.postMessage({
+                                type: 'showError',
+                                message: 'Please enter a Bot Token'
+                            });
                             return;
                         }
                         
                         if (!chatId) {
-                            alert('Please enter a Chat ID');
+                            vscode.postMessage({
+                                type: 'showError',
+                                message: 'Please enter a Chat ID'
+                            });
                             return;
                         }
 
                         if (maxRows < 10 || maxRows > 200) {
-                            alert('Max Rows must be between 10 and 200');
+                            vscode.postMessage({
+                                type: 'showError',
+                                message: 'Max Rows must be between 10 and 200'
+                            });
                             return;
                         }
 
@@ -975,8 +859,7 @@ class ClaudeTerminalProvider implements vscode.WebviewViewProvider {
                             }
                         });
 
-                        console.log('💾 Telegram settings saved:', { botToken: botToken.substring(0, 10) + '...', chatId, maxRows });
-                        telegramSettingsMenu.classList.remove('show');
+                        telegramSettingsMenu.classList.add('hidden');
                     });
 
                     // Test connection button click
@@ -985,7 +868,10 @@ class ClaudeTerminalProvider implements vscode.WebviewViewProvider {
                         const chatId = document.getElementById('chatIdInput').value.trim();
 
                         if (!botToken || !chatId) {
-                            alert('Please enter both Bot Token and Chat ID before testing');
+                            vscode.postMessage({
+                                type: 'showError',
+                                message: 'Please enter both Bot Token and Chat ID before testing'
+                            });
                             return;
                         }
 
@@ -995,20 +881,19 @@ class ClaudeTerminalProvider implements vscode.WebviewViewProvider {
                             chatId: chatId
                         });
 
-                        console.log('🧪 Testing Telegram connection...');
                     });
 
                     // Close menu when clicking outside
                     document.addEventListener('click', (e) => {
                         if (!menuBarButton.contains(e.target) && !telegramSettingsMenu.contains(e.target)) {
-                            telegramSettingsMenu.classList.remove('show');
+                            telegramSettingsMenu.classList.add('hidden');
                         }
                     });
 
                     // Close menu on Escape key
                     document.addEventListener('keydown', (e) => {
-                        if (e.key === 'Escape' && telegramSettingsMenu.classList.contains('show')) {
-                            telegramSettingsMenu.classList.remove('show');
+                        if (e.key === 'Escape' && !telegramSettingsMenu.classList.contains('hidden')) {
+                            telegramSettingsMenu.classList.add('hidden');
                         }
                     });
 
@@ -1026,6 +911,75 @@ class ClaudeTerminalProvider implements vscode.WebviewViewProvider {
                         document.getElementById('chatIdInput').value = settings.chatId || '';
                         document.getElementById('maxRowsInput').value = settings.maxRows || 50;
                     }
+
+                    // Initialize color picker with predefined colors
+                    function initializeColorPicker() {
+                        const colors = [
+                            '#3b82f6', '#ef4444', '#10b981', '#f59e0b', 
+                            '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16',
+                            '#f97316', '#6366f1', '#14b8a6', '#eab308'
+                        ];
+                        
+                        const colorOptions = document.getElementById('colorOptions');
+                        colors.forEach(color => {
+                            const colorButton = document.createElement('button');
+                            colorButton.className = 'w-8 h-8 rounded-full border-2 border-gray-200 dark:border-gray-600 hover:scale-110 transition-transform';
+                            colorButton.style.backgroundColor = color;
+                            colorButton.dataset.color = color;
+                            colorOptions.appendChild(colorButton);
+                            
+                            colorButton.addEventListener('click', () => {
+                                // Remove previous selection
+                                document.querySelectorAll('#colorOptions button').forEach(btn => {
+                                    btn.classList.remove('ring-2', 'ring-offset-2', 'ring-blue-500');
+                                });
+                                // Add selection to current
+                                colorButton.classList.add('ring-2', 'ring-offset-2', 'ring-blue-500');
+                            });
+                        });
+                    }
+
+                    // Initialize on load
+                    initializeColorPicker();
+
+                    // Initialize context menu event listeners
+                    document.getElementById('renameTabOption').addEventListener('click', (e) => {
+                        renameCurrentTab();
+                    });
+                    document.getElementById('changeColorOption').addEventListener('click', (e) => {
+                        showColorPicker();
+                    });
+                    document.getElementById('closeTabOption').addEventListener('click', (e) => {
+                        closeCurrentTab();
+                    });
+
+                    // Rename modal event listeners
+                    document.getElementById('applyRename').addEventListener('click', applyRename);
+                    document.getElementById('cancelRename').addEventListener('click', hideRenameModal);
+
+                    // Color picker event listeners
+                    document.getElementById('applyColorPicker').addEventListener('click', applySelectedColor);
+                    document.getElementById('cancelColorPicker').addEventListener('click', hideColorPicker);
+
+                    // Close modals when clicking outside
+                    document.getElementById('renameModal').addEventListener('click', (e) => {
+                        if (e.target.id === 'renameModal') {
+                            hideRenameModal();
+                        }
+                    });
+
+                    document.getElementById('colorPickerModal').addEventListener('click', (e) => {
+                        if (e.target.id === 'colorPickerModal') {
+                            hideColorPicker();
+                        }
+                    });
+
+                    // Allow Enter key to apply rename
+                    document.getElementById('renameInput').addEventListener('keypress', (e) => {
+                        if (e.key === 'Enter') {
+                            applyRename();
+                        }
+                    });
                 });
 
                 // Handle messages from extension
@@ -1049,22 +1003,190 @@ class ClaudeTerminalProvider implements vscode.WebviewViewProvider {
                     }
                 });
                 
-                // No need for restoration with retainContextWhenHidden
+                // Tab context menu variables
+                let currentContextTab = null;
+                let currentTabName = null;
+                let currentColorDot = null;
+
+                // Show tab context menu
+                function showTabContextMenu(event, tab, tabNameElement, colorDot) {
+                    const contextMenu = document.getElementById('tabContextMenu');
+                    currentContextTab = tab;
+                    currentTabName = tabNameElement;
+                    currentColorDot = colorDot;
+                    
+                    // Position the context menu
+                    contextMenu.style.left = event.clientX + 'px';
+                    contextMenu.style.top = event.clientY + 'px';
+                    contextMenu.classList.remove('hidden');
+                    
+                    // Close menu when clicking elsewhere
+                    setTimeout(() => {
+                        document.addEventListener('click', hideContextMenu, { once: true });
+                    }, 0);
+                }
+
+                // Hide context menu
+                function hideContextMenu() {
+                    document.getElementById('tabContextMenu').classList.add('hidden');
+                    // Don't clear context variables here - they're needed for modals
+                    // Variables will be cleared when modals are closed
+                }
+
+                // Rename tab function
+                function renameCurrentTab() {
+                    if (!currentTabName || !currentContextTab) {
+                        return;
+                    }
+                    
+                    const currentName = currentContextTab.dataset.customName || currentContextTab.dataset.originalId;
+                    
+                    // Show rename modal
+                    const modal = document.getElementById('renameModal');
+                    const input = document.getElementById('renameInput');
+                    input.value = currentName;
+                    modal.classList.remove('hidden');
+                    
+                    // Focus and select the input
+                    setTimeout(() => {
+                        input.focus();
+                        input.select();
+                    }, 100);
+                    
+                    hideContextMenu();
+                }
+
+                // Apply rename
+                function applyRename() {
+                    const input = document.getElementById('renameInput');
+                    const newName = input.value.trim();
+                    
+                    if (newName && currentTabName && currentContextTab) {
+                        currentContextTab.dataset.customName = newName;
+                        currentTabName.textContent = newName;
+                    }
+                    
+                    hideRenameModal();
+                }
+
+                // Hide rename modal
+                function hideRenameModal() {
+                    document.getElementById('renameModal').classList.add('hidden');
+                    // Clear context variables when modal is closed
+                    currentContextTab = null;
+                    currentTabName = null;
+                    currentColorDot = null;
+                }
+
+                // Show color picker modal
+                function showColorPicker() {
+                    if (!currentColorDot || !currentContextTab) {
+                        return;
+                    }
+                    
+                    const modal = document.getElementById('colorPickerModal');
+                    modal.classList.remove('hidden');
+                    
+                    // Highlight current color or select first color if none found
+                    const currentColor = currentContextTab.dataset.color;
+                    
+                    let colorSelected = false;
+                    document.querySelectorAll('#colorOptions button').forEach(btn => {
+                        btn.classList.remove('ring-2', 'ring-offset-2', 'ring-blue-500');
+                        if (btn.dataset.color === currentColor) {
+                            btn.classList.add('ring-2', 'ring-offset-2', 'ring-blue-500');
+                            colorSelected = true;
+                        }
+                    });
+                    
+                    // If no color was selected, select the first one
+                    if (!colorSelected) {
+                        const firstColorBtn = document.querySelector('#colorOptions button');
+                        if (firstColorBtn) {
+                            firstColorBtn.classList.add('ring-2', 'ring-offset-2', 'ring-blue-500');
+                        }
+                    }
+                    
+                    hideContextMenu();
+                }
+
+                // Apply selected color
+                function applySelectedColor() {
+                    const selectedColorBtn = document.querySelector('#colorOptions button.ring-2');
+                    const selectedColor = selectedColorBtn?.dataset.color;
+                    
+                    if (!selectedColor) {
+                        vscode.postMessage({
+                            type: 'showError',
+                            message: 'Please select a color first by clicking on one of the color options.'
+                        });
+                        return;
+                    }
+                    
+                    if (!currentColorDot || !currentContextTab) {
+                        vscode.postMessage({
+                            type: 'showError',
+                            message: 'Error: Please try right-clicking the tab again.'
+                        });
+                        return;
+                    }
+                    
+                    // Apply the color
+                    currentContextTab.dataset.color = selectedColor;
+                    currentColorDot.style.backgroundColor = selectedColor;
+                    
+                    hideColorPicker();
+                }
+
+                // Hide color picker modal
+                function hideColorPicker() {
+                    document.getElementById('colorPickerModal').classList.add('hidden');
+                    // Clear context variables when modal is closed
+                    currentContextTab = null;
+                    currentTabName = null;
+                    currentColorDot = null;
+                }
+
+                // Close current tab
+                function closeCurrentTab() {
+                    if (!currentContextTab) return;
+                    
+                    const terminalId = currentContextTab.dataset.terminalId;
+                    vscode.postMessage({
+                        type: 'closeTerminal',
+                        terminalId: terminalId
+                    });
+                    
+                    hideContextMenu();
+                }
+
 
                 function createTerminalTab(terminalId, name) {
-                    // Create tab
+                    // Create modern tab with Tailwind classes
                     const tabsContainer = document.getElementById('tabs');
                     const tab = document.createElement('div');
-                    tab.className = 'tab';
+                    tab.className = 'group relative flex items-center px-3 py-2 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg cursor-pointer transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 min-w-0 max-w-40';
                     tab.dataset.terminalId = terminalId;
                     
+                    // Store original ID and custom name
+                    tab.dataset.originalId = name; // CC:1, CC:2, etc.
+                    tab.dataset.customName = name; // Initially same as ID
+                    tab.dataset.color = '#3b82f6'; // Default blue color
+                    
+                    // Color indicator dot
+                    const colorDot = document.createElement('div');
+                    colorDot.className = 'w-2 h-2 rounded-full mr-2 flex-shrink-0';
+                    colorDot.style.backgroundColor = '#3b82f6';
+                    
+                    // Tab name with gradient text for active state
                     const tabName = document.createElement('span');
-                    tabName.className = 'tab-name';
+                    tabName.className = 'flex-1 text-sm font-medium text-gray-700 dark:text-gray-300 truncate group-hover:text-gray-900 dark:group-hover:text-white transition-colors';
                     tabName.textContent = name;
                     
+                    // Modern close button with hover effects
                     const closeButton = document.createElement('button');
-                    closeButton.className = 'tab-close';
-                    closeButton.innerHTML = '×';
+                    closeButton.className = 'ml-2 w-5 h-5 rounded-full bg-gray-100 dark:bg-gray-600 hover:bg-red-100 dark:hover:bg-red-900 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-200 hover:scale-110';
+                    closeButton.innerHTML = '<svg class="w-3 h-3 text-gray-500 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>';
                     closeButton.addEventListener('click', (e) => {
                         e.stopPropagation();
                         vscode.postMessage({
@@ -1073,6 +1195,13 @@ class ClaudeTerminalProvider implements vscode.WebviewViewProvider {
                         });
                     });
                     
+                    // Right-click context menu
+                    tab.addEventListener('contextmenu', (e) => {
+                        e.preventDefault();
+                        showTabContextMenu(e, tab, tabName, colorDot);
+                    });
+                    
+                    tab.appendChild(colorDot);
                     tab.appendChild(tabName);
                     tab.appendChild(closeButton);
                     tab.addEventListener('click', () => switchTab(terminalId));
@@ -1087,6 +1216,7 @@ class ClaudeTerminalProvider implements vscode.WebviewViewProvider {
                     
                     const terminalDiv = document.createElement('div');
                     terminalDiv.className = 'terminal';
+                    terminalDiv.style.backgroundColor = 'var(--vscode-terminal-background, #1e1e1e)';
                     terminalPane.appendChild(terminalDiv);
                     
                     terminalContainer.appendChild(terminalPane);
@@ -1209,12 +1339,31 @@ class ClaudeTerminalProvider implements vscode.WebviewViewProvider {
                 }
 
                 function switchTab(terminalId) {
-                    // Update tab states
-                    document.querySelectorAll('.tab').forEach(tab => {
-                        tab.classList.remove('active');
+                    // Update tab states with modern styling
+                    document.querySelectorAll('[data-terminal-id]').forEach(tab => {
+                        // Remove active styling
+                        tab.classList.remove('bg-gradient-to-r', 'from-blue-500', 'to-indigo-600', 'text-white', 'shadow-lg', 'scale-105');
+                        tab.classList.add('bg-white', 'dark:bg-gray-700');
+                        // Reset text color
+                        const tabName = tab.querySelector('span');
+                        if (tabName) {
+                            tabName.classList.remove('text-white');
+                            tabName.classList.add('text-gray-700', 'dark:text-gray-300');
+                        }
                     });
+                    
                     const activeTab = document.querySelector(\`[data-terminal-id="\${terminalId}"]\`);
-                    if (activeTab) activeTab.classList.add('active');
+                    if (activeTab) {
+                        // Add active styling
+                        activeTab.classList.remove('bg-white', 'dark:bg-gray-700');
+                        activeTab.classList.add('bg-gradient-to-r', 'from-blue-500', 'to-indigo-600', 'text-white', 'shadow-lg', 'scale-105');
+                        // Update text color for active state
+                        const tabName = activeTab.querySelector('span');
+                        if (tabName) {
+                            tabName.classList.remove('text-gray-700', 'dark:text-gray-300');
+                            tabName.classList.add('text-white');
+                        }
+                    }
 
                     // Update terminal pane states
                     document.querySelectorAll('.terminal-pane').forEach(pane => {
