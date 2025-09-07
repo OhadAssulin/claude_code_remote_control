@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as pty from 'node-pty';
 import * as path from 'path';
+import * as fs from 'fs';
 
 interface Terminal {
     id: string;
@@ -9,8 +10,103 @@ interface Terminal {
     terminalType: string;
 }
 
+interface GeneralSettings {
+    defaultAgent: string;
+}
+
+interface TelegramSettings {
+    botToken: string;
+    chatId: string;
+    maxRows: number;
+}
+
+interface AppSettings {
+    general: GeneralSettings;
+    telegram: TelegramSettings;
+}
+
+class SettingsManager {
+    private settingsPath: string;
+    private defaultSettings: AppSettings = {
+        general: {
+            defaultAgent: 'claude'
+        },
+        telegram: {
+            botToken: '',
+            chatId: '',
+            maxRows: 50
+        }
+    };
+
+    constructor() {
+        // Get the workspace folder or user home directory
+        const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+        const baseDir = workspaceFolder || require('os').homedir();
+        const rcDir = path.join(baseDir, '.rc');
+        this.settingsPath = path.join(rcDir, 'settings.json');
+        
+        // Ensure .rc directory exists
+        this.ensureDirectoryExists(rcDir);
+    }
+
+    private ensureDirectoryExists(dir: string): void {
+        if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+        }
+    }
+
+    public loadSettings(): AppSettings {
+        try {
+            if (fs.existsSync(this.settingsPath)) {
+                const data = fs.readFileSync(this.settingsPath, 'utf8');
+                const loadedSettings = JSON.parse(data);
+                
+                // Merge with defaults to ensure all properties exist
+                return {
+                    general: { ...this.defaultSettings.general, ...loadedSettings.general },
+                    telegram: { ...this.defaultSettings.telegram, ...loadedSettings.telegram }
+                };
+            }
+        } catch (error) {
+            console.error('Failed to load settings:', error);
+        }
+        
+        return this.defaultSettings;
+    }
+
+    public saveSettings(settings: AppSettings): void {
+        try {
+            const data = JSON.stringify(settings, null, 2);
+            fs.writeFileSync(this.settingsPath, data, 'utf8');
+        } catch (error) {
+            console.error('Failed to save settings:', error);
+            throw error;
+        }
+    }
+
+    public saveGeneralSettings(generalSettings: GeneralSettings): void {
+        const currentSettings = this.loadSettings();
+        currentSettings.general = generalSettings;
+        this.saveSettings(currentSettings);
+    }
+
+    public saveTelegramSettings(telegramSettings: TelegramSettings): void {
+        const currentSettings = this.loadSettings();
+        currentSettings.telegram = telegramSettings;
+        this.saveSettings(currentSettings);
+    }
+
+    public getGeneralSettings(): GeneralSettings {
+        return this.loadSettings().general;
+    }
+
+    public getTelegramSettings(): TelegramSettings {
+        return this.loadSettings().telegram;
+    }
+}
+
 class ClaudeTerminalProvider implements vscode.WebviewViewProvider {
-    public static readonly viewType = 'claude-terminal-panel';
+    public static readonly viewType = 'coding-agent-panel';
     
     private _view?: vscode.WebviewView;
     private terminals: Map<string, Terminal> = new Map();
@@ -18,8 +114,11 @@ class ClaudeTerminalProvider implements vscode.WebviewViewProvider {
     private terminalBuffer: string[] = [];
     private maxBufferLines = 50; // Keep last 50 lines for menu detection
     private menuDetectionTimeout?: NodeJS.Timeout;
+    private settingsManager: SettingsManager;
 
-    constructor(private readonly _extensionUri: vscode.Uri) {}
+    constructor(private readonly _extensionUri: vscode.Uri) {
+        this.settingsManager = new SettingsManager();
+    }
 
     public resolveWebviewView(
         webviewView: vscode.WebviewView,
@@ -68,6 +167,12 @@ class ClaudeTerminalProvider implements vscode.WebviewViewProvider {
                         break;
                     case 'saveTelegramSettings':
                         this.handleSaveTelegramSettings(message.settings);
+                        break;
+                    case 'saveGeneralSettings':
+                        this.handleSaveGeneralSettings(message.settings);
+                        break;
+                    case 'loadGeneralSettings':
+                        this.handleLoadGeneralSettings();
                         break;
                     case 'loadTelegramSettings':
                         this.handleLoadTelegramSettings();
@@ -396,38 +501,89 @@ class ClaudeTerminalProvider implements vscode.WebviewViewProvider {
         );
     }
 
-    private handleSaveTelegramSettings(settings: { botToken: string; chatId: string; maxRows: number; defaultTerminalType: string }) {
+    private handleSaveTelegramSettings(settings: { botToken: string; chatId: string; maxRows: number }) {
         console.log('💾 Saving Telegram settings:', { 
             botToken: settings.botToken.substring(0, 10) + '...', 
             chatId: settings.chatId, 
-            maxRows: settings.maxRows,
-            defaultTerminalType: settings.defaultTerminalType
+            maxRows: settings.maxRows
         });
 
-        // Here we would save to workspace settings or a config file
-        // For now, just show a success message
-        vscode.window.showInformationMessage(
-            `Settings saved! Bot: ${settings.botToken.substring(0, 10)}..., Chat: ${settings.chatId}, Max Rows: ${settings.maxRows}, Default: ${settings.defaultTerminalType}`
-        );
+        try {
+            this.settingsManager.saveTelegramSettings({
+                botToken: settings.botToken,
+                chatId: settings.chatId,
+                maxRows: settings.maxRows
+            });
+            
+            vscode.window.showInformationMessage(
+                `✅ Telegram settings saved! Bot: ${settings.botToken.substring(0, 10)}..., Chat: ${settings.chatId}, Max Rows: ${settings.maxRows}`
+            );
+        } catch (error) {
+            console.error('Failed to save Telegram settings:', error);
+            vscode.window.showErrorMessage(
+                `❌ Failed to save Telegram settings: ${error}`
+            );
+        }
+    }
+
+    private handleSaveGeneralSettings(settings: { defaultAgent: string }) {
+        console.log('💾 Saving General settings:', { 
+            defaultAgent: settings.defaultAgent
+        });
+
+        try {
+            this.settingsManager.saveGeneralSettings({
+                defaultAgent: settings.defaultAgent
+            });
+            
+            vscode.window.showInformationMessage(
+                `✅ General settings saved! Default Agent: ${settings.defaultAgent}`
+            );
+        } catch (error) {
+            console.error('Failed to save general settings:', error);
+            vscode.window.showErrorMessage(
+                `❌ Failed to save general settings: ${error}`
+            );
+        }
+    }
+
+    private handleLoadGeneralSettings() {
+        console.log('📥 Loading General settings');
+
+        try {
+            const generalSettings = this.settingsManager.getGeneralSettings();
+            
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'generalSettingsLoaded',
+                    settings: generalSettings
+                });
+            }
+        } catch (error) {
+            console.error('Failed to load general settings:', error);
+            vscode.window.showErrorMessage(
+                `❌ Failed to load general settings: ${error}`
+            );
+        }
     }
 
     private handleLoadTelegramSettings() {
         console.log('📥 Loading Telegram settings');
 
-        // For now, send dummy settings
-        // Later we would load from workspace settings or config file
-        const dummySettings = {
-            botToken: '',
-            chatId: '',
-            maxRows: 50,
-            defaultTerminalType: 'claude'
-        };
-
-        if (this._view) {
-            this._view.webview.postMessage({
-                type: 'telegramSettingsLoaded',
-                settings: dummySettings
-            });
+        try {
+            const telegramSettings = this.settingsManager.getTelegramSettings();
+            
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'telegramSettingsLoaded',
+                    settings: telegramSettings
+                });
+            }
+        } catch (error) {
+            console.error('Failed to load Telegram settings:', error);
+            vscode.window.showErrorMessage(
+                `❌ Failed to load Telegram settings: ${error}`
+            );
         }
     }
 
@@ -493,7 +649,7 @@ class ClaudeTerminalProvider implements vscode.WebviewViewProvider {
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline' https://cdn.tailwindcss.com; script-src ${webview.cspSource} 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com; font-src ${webview.cspSource}; connect-src https://cdn.tailwindcss.com;">
-            <title>Claude Tabbed Terminal</title>
+            <title>CODING AGENTS</title>
             <link rel="stylesheet" href="${xtermCssUri}">
             <script src="https://cdn.tailwindcss.com"></script>
             <script>
@@ -644,18 +800,73 @@ class ClaudeTerminalProvider implements vscode.WebviewViewProvider {
                         </span>
                     </label>
                     
-                    <!-- Settings Menu Button -->
-                    <div class="relative">
-                        <button class="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600 transition-all duration-200 shadow-sm hover:shadow-md" id="menuBarButton" title="Settings">
-                                <svg class="w-4 h-4 text-gray-600 dark:text-gray-400" fill="currentColor" viewBox="0 0 16 16">
-                                <circle cx="8" cy="3" r="1.5"/>
-                                <circle cx="8" cy="8" r="1.5"/>
-                                <circle cx="8" cy="13" r="1.5"/>
+                    <!-- Settings Buttons -->
+                    <div class="flex items-center space-x-2">
+                        <button class="inline-flex items-center justify-center px-3 py-2 text-sm font-medium rounded-lg bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600 transition-all duration-200 shadow-sm hover:shadow-md text-gray-700 dark:text-gray-300" id="generalSettingsButton" title="General Settings">
+                            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
                             </svg>
+                            General
                         </button>
+                        <button class="inline-flex items-center justify-center px-3 py-2 text-sm font-medium rounded-lg bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600 transition-all duration-200 shadow-sm hover:shadow-md text-gray-700 dark:text-gray-300" id="telegramSettingsButton" title="Telegram Settings">
+                            <svg class="w-4 h-4 mr-1" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.820 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/>
+                            </svg>
+                            Telegram
+                        </button>
+                    </div>
+                    
+                    <!-- General Settings Modal -->
+                    <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden" id="generalSettingsModal">
+                        <div class="bg-white dark:bg-gray-800 rounded-xl p-6 max-w-md w-full mx-4">
+                            <!-- Header -->
+                            <div class="flex items-center justify-between mb-6">
+                                <div class="flex items-center space-x-2">
+                                    <div class="w-8 h-8 bg-green-500 rounded-lg flex items-center justify-center">
+                                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <h3 class="font-semibold text-gray-900 dark:text-white">General Settings</h3>
+                                        <p class="text-xs text-gray-500 dark:text-gray-400">Configure default agent preferences</p>
+                                    </div>
+                                </div>
+                                <button class="w-8 h-8 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center justify-center transition-colors" id="closeGeneralSettingsButton" title="Close">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                    </svg>
+                                </button>
+                            </div>
+                            
+                            <!-- Form Content -->
+                            <div class="space-y-4">
+                                <div class="space-y-2">
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Default Agent</label>
+                                    <select 
+                                        id="defaultAgentInput"
+                                        class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:focus:ring-blue-400 text-sm transition-colors"
+                                    >
+                                        <option value="claude">Claude</option>
+                                        <option value="codex">Codex</option>
+                                    </select>
+                                </div>
+                                
+                                <!-- Action Buttons -->
+                                <div class="flex justify-end space-x-2 pt-2">
+                                    <button class="px-4 py-2 text-gray-900 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg border border-gray-300 dark:border-gray-600" id="cancelGeneralSettings">Cancel</button>
+                                    <button class="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg" id="saveGeneralSettings">Save</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Telegram Settings Modal -->
                         
-                        <!-- Modern Settings Dropdown -->
-                        <div class="absolute right-0 top-12 w-80 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl z-50 hidden animate-in fade-in-0 zoom-in-95 duration-200" id="telegramSettingsMenu">
+                    <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden" id="telegramSettingsModal">
+                        <div class="bg-white dark:bg-gray-800 rounded-xl max-w-md w-full mx-4">
                             <!-- Header -->
                             <div class="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-t-xl">
                                 <div class="flex items-center space-x-2">
@@ -716,17 +927,6 @@ class ClaudeTerminalProvider implements vscode.WebviewViewProvider {
                                     >
                                 </div>
                                 
-                                <!-- Default Terminal Type -->
-                                <div class="space-y-2">
-                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Default Terminal Type</label>
-                                    <select 
-                                        id="defaultTerminalTypeInput"
-                                        class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:focus:ring-blue-400 text-sm transition-colors"
-                                    >
-                                        <option value="claude">Claude</option>
-                                        <option value="codex">Codex</option>
-                                    </select>
-                                </div>
                                 
                                 <!-- Action Buttons -->
                                 <div class="flex space-x-2 pt-2">
@@ -848,31 +1048,63 @@ class ClaudeTerminalProvider implements vscode.WebviewViewProvider {
                         });
                     });
 
-                    // Telegram Settings Menu event listeners
-                    const menuBarButton = document.getElementById('menuBarButton');
-                    const telegramSettingsMenu = document.getElementById('telegramSettingsMenu');
-                    const menuOverlay = document.getElementById('menuOverlay');
+                    // Settings Buttons event listeners
+                    const generalSettingsButton = document.getElementById('generalSettingsButton');
+                    const telegramSettingsButton = document.getElementById('telegramSettingsButton');
+                    const generalSettingsModal = document.getElementById('generalSettingsModal');
+                    const telegramSettingsModal = document.getElementById('telegramSettingsModal');
+                    const closeGeneralSettingsButton = document.getElementById('closeGeneralSettingsButton');
                     const closeSettingsButton = document.getElementById('closeSettingsButton');
+                    const saveGeneralSettings = document.getElementById('saveGeneralSettings');
+                    const cancelGeneralSettings = document.getElementById('cancelGeneralSettings');
                     const saveTelegramSettings = document.getElementById('saveTelegramSettings');
                     const testTelegramConnection = document.getElementById('testTelegramConnection');
                     
-                    // Menu button click - show/hide settings
-                    menuBarButton.addEventListener('click', (e) => {
+                    // General Settings button click
+                    generalSettingsButton.addEventListener('click', (e) => {
                         e.stopPropagation();
-                        
-                        // Toggle modern menu visibility
-                        const isHidden = telegramSettingsMenu.classList.contains('hidden');
-                        if (isHidden) {
-                            telegramSettingsMenu.classList.remove('hidden');
-                            loadTelegramSettings();
-                        } else {
-                            telegramSettingsMenu.classList.add('hidden');
-                        }
+                        generalSettingsModal.classList.remove('hidden');
+                        loadGeneralSettings();
+                    });
+                    
+                    // Telegram Settings button click
+                    telegramSettingsButton.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        telegramSettingsModal.classList.remove('hidden');
+                        loadTelegramSettings();
                     });
 
-                    // Close button click
+                    // Close buttons click
+                    closeGeneralSettingsButton.addEventListener('click', () => {
+                        generalSettingsModal.classList.add('hidden');
+                    });
+                    
                     closeSettingsButton.addEventListener('click', () => {
-                        telegramSettingsMenu.classList.add('hidden');
+                        telegramSettingsModal.classList.add('hidden');
+                    });
+                    
+                    // General Settings save/cancel
+                    saveGeneralSettings.addEventListener('click', () => {
+                        const defaultAgent = document.getElementById('defaultAgentInput').value;
+                        
+                        // Update current and default terminal types
+                        defaultTerminalType = defaultAgent;
+                        currentTerminalType = defaultAgent;
+                        updateTerminalTypeIndicator(defaultAgent);
+                        
+                        // Send settings to extension (you can extend this later)
+                        vscode.postMessage({
+                            type: 'saveGeneralSettings',
+                            settings: {
+                                defaultAgent: defaultAgent
+                            }
+                        });
+                        
+                        generalSettingsModal.classList.add('hidden');
+                    });
+                    
+                    cancelGeneralSettings.addEventListener('click', () => {
+                        generalSettingsModal.classList.add('hidden');
                     });
 
                     // Save settings button click
@@ -880,7 +1112,6 @@ class ClaudeTerminalProvider implements vscode.WebviewViewProvider {
                         const botToken = document.getElementById('botTokenInput').value.trim();
                         const chatId = document.getElementById('chatIdInput').value.trim();
                         const maxRows = parseInt(document.getElementById('maxRowsInput').value) || 50;
-                        const defaultTerminalTypeValue = document.getElementById('defaultTerminalTypeInput').value;
 
                         // Basic validation
                         if (!botToken) {
@@ -913,17 +1144,11 @@ class ClaudeTerminalProvider implements vscode.WebviewViewProvider {
                             settings: {
                                 botToken: botToken,
                                 chatId: chatId,
-                                maxRows: maxRows,
-                                defaultTerminalType: defaultTerminalTypeValue
+                                maxRows: maxRows
                             }
                         });
 
-                        // Update current terminal type to match default
-                        defaultTerminalType = defaultTerminalTypeValue;
-                        currentTerminalType = defaultTerminalTypeValue;
-                        updateTerminalTypeIndicator(defaultTerminalTypeValue);
-
-                        telegramSettingsMenu.classList.add('hidden');
+                        telegramSettingsModal.classList.add('hidden');
                     });
 
                     // Test connection button click
@@ -947,26 +1172,54 @@ class ClaudeTerminalProvider implements vscode.WebviewViewProvider {
 
                     });
 
-                    // Close menu when clicking outside
-                    document.addEventListener('click', (e) => {
-                        if (!menuBarButton.contains(e.target) && !telegramSettingsMenu.contains(e.target)) {
-                            telegramSettingsMenu.classList.add('hidden');
+                    // Close modals when clicking outside
+                    generalSettingsModal.addEventListener('click', (e) => {
+                        if (e.target === generalSettingsModal) {
+                            generalSettingsModal.classList.add('hidden');
+                        }
+                    });
+                    
+                    telegramSettingsModal.addEventListener('click', (e) => {
+                        if (e.target === telegramSettingsModal) {
+                            telegramSettingsModal.classList.add('hidden');
                         }
                     });
 
-                    // Close menu on Escape key
+                    // Close modals on Escape key
                     document.addEventListener('keydown', (e) => {
-                        if (e.key === 'Escape' && !telegramSettingsMenu.classList.contains('hidden')) {
-                            telegramSettingsMenu.classList.add('hidden');
+                        if (e.key === 'Escape') {
+                            if (!generalSettingsModal.classList.contains('hidden')) {
+                                generalSettingsModal.classList.add('hidden');
+                            }
+                            if (!telegramSettingsModal.classList.contains('hidden')) {
+                                telegramSettingsModal.classList.add('hidden');
+                            }
                         }
                     });
 
-                    // Load settings function
+                    // Load settings functions
+                    function loadGeneralSettings() {
+                        // Request settings from extension host
+                        vscode.postMessage({
+                            type: 'loadGeneralSettings'
+                        });
+                    }
+                    
                     function loadTelegramSettings() {
                         // Request settings from extension host
                         vscode.postMessage({
                             type: 'loadTelegramSettings'
                         });
+                    }
+                    
+                    // Populate settings forms
+                    function populateGeneralSettings(settings) {
+                        document.getElementById('defaultAgentInput').value = settings.defaultAgent || 'claude';
+                        
+                        // Update current terminal type to match loaded default
+                        defaultTerminalType = settings.defaultAgent || 'claude';
+                        currentTerminalType = defaultTerminalType;
+                        updateTerminalTypeIndicator(currentTerminalType);
                     }
 
                     // Populate settings form
@@ -974,12 +1227,6 @@ class ClaudeTerminalProvider implements vscode.WebviewViewProvider {
                         document.getElementById('botTokenInput').value = settings.botToken || '';
                         document.getElementById('chatIdInput').value = settings.chatId || '';
                         document.getElementById('maxRowsInput').value = settings.maxRows || 50;
-                        document.getElementById('defaultTerminalTypeInput').value = settings.defaultTerminalType || 'claude';
-                        
-                        // Update current terminal type to match loaded default
-                        defaultTerminalType = settings.defaultTerminalType || 'claude';
-                        currentTerminalType = defaultTerminalType;
-                        updateTerminalTypeIndicator(currentTerminalType);
                     }
 
                     // Initialize color picker with predefined colors
@@ -1100,6 +1347,9 @@ class ClaudeTerminalProvider implements vscode.WebviewViewProvider {
                             break;
                         case 'telegramSettingsLoaded':
                             populateTelegramSettings(message.settings);
+                            break;
+                        case 'generalSettingsLoaded':
+                            populateGeneralSettings(message.settings);
                             break;
                         case 'terminalClosed':
                             closeTerminalTab(message.terminalId);
@@ -1762,13 +2012,13 @@ export function activate(context: vscode.ExtensionContext) {
         )
     );
 
-    const disposable = vscode.commands.registerCommand('claude-remote-control.openTerminal', () => {
+    const disposable = vscode.commands.registerCommand('coding-agent-remote-control.openTerminal', () => {
         // Set context to make the view visible
-        vscode.commands.executeCommand('setContext', 'claudeTerminal.active', true);
+        vscode.commands.executeCommand('setContext', 'codingAgent.active', true);
         // Show the panel and focus our terminal
         vscode.commands.executeCommand('workbench.action.togglePanel');
         setTimeout(() => {
-            vscode.commands.executeCommand('claude-terminal-panel.focus');
+            vscode.commands.executeCommand('coding-agent-panel.focus');
         }, 100);
     });
 

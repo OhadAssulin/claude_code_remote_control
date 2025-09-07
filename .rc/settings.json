@@ -1,0 +1,10 @@
+{
+  "general": {
+    "defaultAgent": "codex"
+  },
+  "telegram": {
+    "botToken": "1234567890:ABCdefGHIjklMNOpqrsTUVwxyz",
+    "chatId": "123456789",
+    "maxRows": 75
+  }
+}

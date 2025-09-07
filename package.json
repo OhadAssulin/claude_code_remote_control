@@ -1,6 +1,6 @@
 {
-  "name": "claude-remote-control",
-  "displayName": "Claude Terminal With Remote Control",
+  "name": "coding-agent-remote-control",
+  "displayName": "Coding Agent Terminal With Remote Control",
   "description": "A VS Code extension with tabbed terminals with remote control",
   "version": "0.0.1",
   "engines": {
@@ -10,19 +10,19 @@
     "Other"
   ],
   "activationEvents": [
-    "onCommand:claude-remote-control.openTerminal"
+    "onCommand:coding-agent-remote-control.openTerminal"
   ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
       {
-        "command": "claude-remote-control.openTerminal",
-        "title": "Open Claude Tabbed Terminal"
+        "command": "coding-agent-remote-control.openTerminal",
+        "title": "Open Coding Agent Terminal"
       }
     ],
     "keybindings": [
       {
-        "command": "claude-remote-control.openTerminal",
+        "command": "coding-agent-remote-control.openTerminal",
         "key": "cmd+shift+c",
         "mac": "cmd+shift+c"
       }
@@ -30,19 +30,19 @@
     "viewsContainers": {
       "panel": [
         {
-          "id": "claude-terminal-container",
-          "title": "Claude Terminal",
+          "id": "coding-agent-container",
+          "title": "CODING AGENTS",
           "icon": "$(terminal)"
         }
       ]
     },
     "views": {
-      "claude-terminal-container": [
+      "coding-agent-container": [
         {
-          "id": "claude-terminal-panel",
-          "name": "Claude Terminal",
+          "id": "coding-agent-panel",
+          "name": "CODING AGENTS",
           "type": "webview",
-          "when": "claudeTerminal.active"
+          "when": "codingAgent.active"
         }
       ]
     }
