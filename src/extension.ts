@@ -6,6 +6,7 @@ interface Terminal {
     id: string;
     name: string;
     ptyProcess: pty.IPty;
+    terminalType: string;
 }
 
 class ClaudeTerminalProvider implements vscode.WebviewViewProvider {
@@ -42,7 +43,7 @@ class ClaudeTerminalProvider implements vscode.WebviewViewProvider {
             async (message) => {
                 switch (message.type) {
                     case 'createTerminal':
-                        await this.createNewTerminal();
+                        await this.createNewTerminal(message.terminalType);
                         break;
                     case 'terminalInput':
                         const terminal = this.terminals.get(message.terminalId);
@@ -77,23 +78,28 @@ class ClaudeTerminalProvider implements vscode.WebviewViewProvider {
                     case 'showError':
                         vscode.window.showErrorMessage(message.message);
                         break;
+                    case 'webviewReady':
+                        // Create the first terminal when webview is fully loaded
+                        await this.createNewTerminal('claude');
+                        break;
                     // No need for restoreTerminals with retainContextWhenHidden
                 }
             }
         );
 
-        // Create the first terminal
-        this.createNewTerminal();
+        // Create the first terminal after webview is ready
+        // This will be triggered by the webview when it's loaded
     }
 
-    private async createNewTerminal() {
+    private async createNewTerminal(terminalType: string = 'claude') {
         if (!this._view) return;
 
         const terminalId = `terminal-${this.terminalCounter++}`;
-        const terminalName = `CC:${this.terminalCounter - 1}`;
+        const terminalName = `${terminalType.toUpperCase()}:${this.terminalCounter - 1}`;
 
-        // Create a new pty process that runs claude
-        const ptyProcess = pty.spawn('claude', [], {
+        // Create a new pty process that runs the selected terminal type
+        const command = terminalType === 'codex' ? 'codex' : 'claude';
+        const ptyProcess = pty.spawn(command, [], {
             name: 'xterm-color',
             cols: 80,
             rows: 24,
@@ -104,7 +110,8 @@ class ClaudeTerminalProvider implements vscode.WebviewViewProvider {
         const terminal: Terminal = {
             id: terminalId,
             name: terminalName,
-            ptyProcess
+            ptyProcess,
+            terminalType: terminalType
         };
 
         this.terminals.set(terminalId, terminal);
@@ -118,8 +125,10 @@ class ClaudeTerminalProvider implements vscode.WebviewViewProvider {
                     data: data
                 });
                 
-                // Parse output for Claude action menus
-                this._parseClaudeActions(data);
+                // Parse output for Claude action menus (only for Claude terminals)
+                if (terminal.terminalType === 'claude') {
+                    this._parseClaudeActions(data);
+                }
             }
         });
 
@@ -149,6 +158,14 @@ class ClaudeTerminalProvider implements vscode.WebviewViewProvider {
         if (terminal) {
             terminal.ptyProcess.kill();
             this.terminals.delete(terminalId);
+            
+            // Notify webview that terminal was closed
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'terminalClosed',
+                    terminalId: terminalId
+                });
+            }
         }
     }
 
@@ -379,17 +396,18 @@ class ClaudeTerminalProvider implements vscode.WebviewViewProvider {
         );
     }
 
-    private handleSaveTelegramSettings(settings: { botToken: string; chatId: string; maxRows: number }) {
+    private handleSaveTelegramSettings(settings: { botToken: string; chatId: string; maxRows: number; defaultTerminalType: string }) {
         console.log('💾 Saving Telegram settings:', { 
             botToken: settings.botToken.substring(0, 10) + '...', 
             chatId: settings.chatId, 
-            maxRows: settings.maxRows 
+            maxRows: settings.maxRows,
+            defaultTerminalType: settings.defaultTerminalType
         });
 
         // Here we would save to workspace settings or a config file
         // For now, just show a success message
         vscode.window.showInformationMessage(
-            `Telegram settings saved successfully! Bot: ${settings.botToken.substring(0, 10)}..., Chat: ${settings.chatId}, Max Rows: ${settings.maxRows}`
+            `Settings saved! Bot: ${settings.botToken.substring(0, 10)}..., Chat: ${settings.chatId}, Max Rows: ${settings.maxRows}, Default: ${settings.defaultTerminalType}`
         );
     }
 
@@ -401,7 +419,8 @@ class ClaudeTerminalProvider implements vscode.WebviewViewProvider {
         const dummySettings = {
             botToken: '',
             chatId: '',
-            maxRows: 50
+            maxRows: 50,
+            defaultTerminalType: 'claude'
         };
 
         if (this._view) {
@@ -585,11 +604,30 @@ class ClaudeTerminalProvider implements vscode.WebviewViewProvider {
                 <!-- Tab Container -->
                 <div class="flex items-center space-x-1">
                     <div id="tabs" class="flex space-x-1"></div>
-                    <button class="ml-2 inline-flex items-center justify-center w-8 h-8 rounded-lg bg-blue-500 hover:bg-blue-600 text-white transition-all duration-200 hover:scale-105 shadow-md" id="newTabButton">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
-                        </svg>
-                    </button>
+                    <div class="ml-2 flex items-center">
+                        <button class="inline-flex items-center justify-center w-8 h-8 rounded-l-lg bg-blue-500 hover:bg-blue-600 text-white transition-all duration-200 hover:scale-105 shadow-md" id="newTabButton">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                            </svg>
+                        </button>
+                        <div class="relative">
+                            <button class="inline-flex items-center justify-center w-6 h-8 rounded-r-lg bg-blue-500 hover:bg-blue-600 text-white transition-all duration-200 hover:scale-105 shadow-md border-l border-blue-400" id="terminalTypeSelector">
+                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                                </svg>
+                            </button>
+                            <div id="terminalTypeDropdown" class="absolute top-full right-0 mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl z-50 hidden min-w-32">
+                                <button class="w-full text-left px-3 py-2 text-gray-900 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center space-x-2 rounded-t-lg" data-terminal-type="claude">
+                                    <div class="w-2 h-2 rounded-full bg-blue-500"></div>
+                                    <span class="text-sm">Claude</span>
+                                </button>
+                                <button class="w-full text-left px-3 py-2 text-gray-900 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center space-x-2 rounded-b-lg" data-terminal-type="codex">
+                                    <div class="w-2 h-2 rounded-full bg-green-500"></div>
+                                    <span class="text-sm">Codex</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 
                 <!-- Remote Control Section -->
@@ -678,6 +716,18 @@ class ClaudeTerminalProvider implements vscode.WebviewViewProvider {
                                     >
                                 </div>
                                 
+                                <!-- Default Terminal Type -->
+                                <div class="space-y-2">
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Default Terminal Type</label>
+                                    <select 
+                                        id="defaultTerminalTypeInput"
+                                        class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:focus:ring-blue-400 text-sm transition-colors"
+                                    >
+                                        <option value="claude">Claude</option>
+                                        <option value="codex">Codex</option>
+                                    </select>
+                                </div>
+                                
                                 <!-- Action Buttons -->
                                 <div class="flex space-x-2 pt-2">
                                     <button class="flex-1 bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200 shadow-sm hover:shadow-md" id="saveTelegramSettings">
@@ -753,14 +803,21 @@ class ClaudeTerminalProvider implements vscode.WebviewViewProvider {
                 const terminals = new Map();
                 let activeTerminalId = null;
                 let remoteControlEnabled = false;
+                let currentTerminalType = 'claude'; // Default terminal type
+                let defaultTerminalType = 'claude';
                 
                 // No need for state persistence with retainContextWhenHidden: true
 
                 // Initialize
                 document.addEventListener('DOMContentLoaded', () => {
+                    // Notify extension that webview is ready
+                    vscode.postMessage({
+                        type: 'webviewReady'
+                    });
                     document.getElementById('newTabButton').addEventListener('click', () => {
                         vscode.postMessage({
-                            type: 'createTerminal'
+                            type: 'createTerminal',
+                            terminalType: currentTerminalType
                         });
                     });
 
@@ -823,6 +880,7 @@ class ClaudeTerminalProvider implements vscode.WebviewViewProvider {
                         const botToken = document.getElementById('botTokenInput').value.trim();
                         const chatId = document.getElementById('chatIdInput').value.trim();
                         const maxRows = parseInt(document.getElementById('maxRowsInput').value) || 50;
+                        const defaultTerminalTypeValue = document.getElementById('defaultTerminalTypeInput').value;
 
                         // Basic validation
                         if (!botToken) {
@@ -855,9 +913,15 @@ class ClaudeTerminalProvider implements vscode.WebviewViewProvider {
                             settings: {
                                 botToken: botToken,
                                 chatId: chatId,
-                                maxRows: maxRows
+                                maxRows: maxRows,
+                                defaultTerminalType: defaultTerminalTypeValue
                             }
                         });
+
+                        // Update current terminal type to match default
+                        defaultTerminalType = defaultTerminalTypeValue;
+                        currentTerminalType = defaultTerminalTypeValue;
+                        updateTerminalTypeIndicator(defaultTerminalTypeValue);
 
                         telegramSettingsMenu.classList.add('hidden');
                     });
@@ -910,6 +974,12 @@ class ClaudeTerminalProvider implements vscode.WebviewViewProvider {
                         document.getElementById('botTokenInput').value = settings.botToken || '';
                         document.getElementById('chatIdInput').value = settings.chatId || '';
                         document.getElementById('maxRowsInput').value = settings.maxRows || 50;
+                        document.getElementById('defaultTerminalTypeInput').value = settings.defaultTerminalType || 'claude';
+                        
+                        // Update current terminal type to match loaded default
+                        defaultTerminalType = settings.defaultTerminalType || 'claude';
+                        currentTerminalType = defaultTerminalType;
+                        updateTerminalTypeIndicator(currentTerminalType);
                     }
 
                     // Initialize color picker with predefined colors
@@ -980,7 +1050,42 @@ class ClaudeTerminalProvider implements vscode.WebviewViewProvider {
                             applyRename();
                         }
                     });
+
+                    // Terminal type dropdown functionality
+                    const terminalTypeSelector = document.getElementById('terminalTypeSelector');
+                    const terminalTypeDropdown = document.getElementById('terminalTypeDropdown');
+                    
+                    terminalTypeSelector.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        terminalTypeDropdown.classList.toggle('hidden');
+                    });
+
+                    // Terminal type selection
+                    document.querySelectorAll('[data-terminal-type]').forEach(button => {
+                        button.addEventListener('click', (e) => {
+                            const selectedType = e.currentTarget.dataset.terminalType;
+                            currentTerminalType = selectedType;
+                            terminalTypeDropdown.classList.add('hidden');
+                            
+                            // Update button appearance or indicator if needed
+                            updateTerminalTypeIndicator(selectedType);
+                        });
+                    });
+
+                    // Close dropdown when clicking outside
+                    document.addEventListener('click', (e) => {
+                        if (!terminalTypeSelector.contains(e.target) && !terminalTypeDropdown.contains(e.target)) {
+                            terminalTypeDropdown.classList.add('hidden');
+                        }
+                    });
                 });
+
+                // Update terminal type indicator
+                function updateTerminalTypeIndicator(terminalType) {
+                    // You could add visual feedback here, like changing the dropdown button color
+                    // or adding a small indicator showing the current selection
+                    currentTerminalType = terminalType;
+                }
 
                 // Handle messages from extension
                 window.addEventListener('message', event => {
@@ -1391,16 +1496,20 @@ class ClaudeTerminalProvider implements vscode.WebviewViewProvider {
                         terminals.delete(terminalId);
                     }
 
-                    // Remove tab and pane
-                    const tab = document.querySelector(\`.tab[data-terminal-id="\${terminalId}"]\`);
-                    const pane = document.querySelector(\`.terminal-pane[data-terminal-id="\${terminalId}"]\`);
+                    // Remove tab and pane using correct selectors
+                    const tab = document.querySelector(\`[data-terminal-id="\${terminalId}"]\`);
+                    const pane = document.querySelector(\`#terminal-\${terminalId}\`);
                     
-                    if (tab) tab.remove();
-                    if (pane) pane.remove();
+                    if (tab) {
+                        tab.remove();
+                    }
+                    if (pane) {
+                        pane.remove();
+                    }
 
                     // Switch to another tab if this was active
                     if (activeTerminalId === terminalId) {
-                        const remainingTabs = document.querySelectorAll('.tab');
+                        const remainingTabs = document.querySelectorAll('[data-terminal-id]');
                         if (remainingTabs.length > 0) {
                             const nextTab = remainingTabs[0];
                             switchTab(nextTab.dataset.terminalId);
